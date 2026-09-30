@@ -3,12 +3,12 @@
 
 int main() {
     if(SDL_Init(SDL_INIT_GAMECONTROLLER) < 0) {
-        std::printf("SDL init failed: %s\n". SDL_GetError());
+        std::printf("SDL init failed: %s\n", SDL_GetError());
         return 1;
     }
 
     SDL_GameController* pad = nullptr;
-    for(int i = 0; i < SDL_NumJoysticks(), ++i){
+    for(int i = 0; i < SDL_NumJoysticks(); ++i){
         if(SDL_IsGameController(i)){
             pad = SDL_GameControllerOpen(i);
             break;
@@ -33,5 +33,5 @@ int main() {
         std::fflush(stdout);
         SDL_Delay(50);
     }
-t
+
 }

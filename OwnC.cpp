@@ -80,7 +80,17 @@ int main() {
                 break;
         }
     }
-        if (errno != EAGAIN) running = false;
+
+    if (e.number == 0 && e.value > 10000){
+        lgTxServo(h, servo_TL, 1500, 50, 0, 0);
+        lgTxPwm(h, motor_TLA, 1500, duty, 0, 0);
+    }
+    else{
+        lgTxServo(h, servo_TL, 0, 50, 0, 0);
+        lgTxPwm(h, motor_TLA, 0, duty, 0, 0);
+    }
+
+    if (errno != EAGAIN) running = false;
     usleep(10000);
 
     }

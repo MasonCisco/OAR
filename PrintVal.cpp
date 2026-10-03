@@ -113,7 +113,7 @@ int main(int argc, char **argv)
                     break;
 
                 case JS_EVENT_BUTTON:
-                    if (e.number < buttons.size()) buttons[e.number] = e.value;
+      –              if (e.number < buttons.size()) buttons[e.number] = e.value;
                     if (!init)
                         std::printf("Button %u: %s\n", e.number, e.value ? "PRESSED" : "released");
                     if (e.number == 0)

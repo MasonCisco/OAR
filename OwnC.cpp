@@ -6,8 +6,11 @@
 #include <vector>
 #include <csignal>
 #include <cerrno>
+#include <cstdlib>
 
 std::vector<int> axes (8,0), buttons(16,0);
+
+static const int deadzone = 8000;
 
 volatile std::sig_atomic_t stop = 0;
 void onSignal(int) { stop = 1; }
@@ -62,6 +65,7 @@ int main() {
 
     std::signal(SIGINT, onSignal);
     bool running = true;
+    int lastdir = 0;
     while (running && !stop){
     js_event e;
     while (read(js,&e, sizeof(e)) == (ssize_t)sizeof(e)){
@@ -80,15 +84,66 @@ int main() {
                 break;
         }
     }
+    
+    int dir = 0;
+    if (axes[0] > deadzone) dir = 1;
+    if (axes[0] < -deadzone) dir = -1;
+    
+    if (dir != lastdir){
+    if(dir == 1){
+    lgTxServo(h, servo_TL, 1500, 50, 0, 0);
+    lgTxPwm(h, motor_TLA, 1500, duty, 0, 0);
+    lgTxPwm(h, motor_TLB, 0, duty, 0, 0);
 
-    if (e.number == 0 && e.value > 10000){
-        lgTxServo(h, servo_TL, 1500, 50, 0, 0);
-        lgTxPwm(h, motor_TLA, 1500, duty, 0, 0);
+    lgTxServo(h, servo_TR, 1500, 50, 0, 0);
+    lgTxPwm(h, motor_TRA, 1500, duty, 0, 0);
+    lgTxPwm(h, motor_TRB, 0, duty, 0, 0);
+
+    lgTxServo(h, servo_BL, 1500, 50, 0, 0);
+    lgTxPwm(h, motor_BLA, 1500, duty, 0, 0);
+    lgTxPwm(h, motor_BLB, 0, duty, 0, 0);
+
+    lgTxServo(h, servo_BR, 1500, 50, 0, 0);
+    lgTxPwm(h, motor_BRA, 1500, duty, 0, 0);
+    lgTxPwm(h, motor_BRB, 0, duty, 0, 0);
+    } 
+    else if (dir == -1){
+    lgTxServo(h, servo_TL, 1500, 50, 0, 0);
+    lgTxPwm(h, motor_TLA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_TLB, 1500, duty, 0, 0);
+
+    lgTxServo(h, servo_TR, 1500, 50, 0, 0);
+    lgTxPwm(h, motor_TRA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_TRB, 1500, duty, 0, 0);
+
+    lgTxServo(h, servo_BL, 1500, 50, 0, 0);
+    lgTxPwm(h, motor_BLA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_BLB, 1500, duty, 0, 0);
+
+    lgTxServo(h, servo_BR, 1500, 50, 0, 0);
+    lgTxPwm(h, motor_BRA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_BRB, 1500, duty, 0, 0);
     }
-    else{
-        lgTxServo(h, servo_TL, 0, 50, 0, 0);
-        lgTxPwm(h, motor_TLA, 0, duty, 0, 0);
+    else {
+    lgTxServo(h, servo_TL, 0, 50, 0, 0);
+    lgTxPwm(h, motor_TLA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_TLB, 0, duty, 0, 0);
+
+    lgTxServo(h, servo_TR, 0, 50, 0, 0);
+    lgTxPwm(h, motor_TRA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_TRB, 0, duty, 0, 0);
+
+    lgTxServo(h, servo_BL, 0, 50, 0, 0);
+    lgTxPwm(h, motor_BLA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_BLB, 0, duty, 0, 0);
+
+    lgTxServo(h, servo_BR, 0, 50, 0, 0);
+    lgTxPwm(h, motor_BRA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_BRB, 0, duty, 0, 0);
     }
+    lastdir = dir;
+}
+  
 
     if (errno != EAGAIN) running = false;
     usleep(10000);
@@ -97,6 +152,19 @@ int main() {
 
     lgTxServo(h, servo_TL, 0, 50, 0, 0);
     lgTxPwm(h, motor_TLA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_TLB, 0, duty, 0, 0);
+
+    lgTxServo(h, servo_TR, 0, 50, 0, 0);
+    lgTxPwm(h, motor_TRA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_TRB, 0, duty, 0, 0);
+
+    lgTxServo(h, servo_BL, 0, 50, 0, 0);
+    lgTxPwm(h, motor_BLA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_BLB, 0, duty, 0, 0);
+
+    lgTxServo(h, servo_BR, 0, 50, 0, 0);
+    lgTxPwm(h, motor_BRA, 0, duty, 0, 0);
+    lgTxPwm(h, motor_BRB, 0, duty, 0, 0);
     close(js);
     lgGpiochipClose(h);
     return 0;

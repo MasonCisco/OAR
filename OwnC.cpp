@@ -3,22 +3,28 @@
 #include <unistd.h>
 #include <lgpio.h>
 #include <cstdio>
+#include <cmath>
 #include <vector>
 #include <csignal>
 #include <cerrno>
 #include <cstring>
+#include <algorithm>
 
 // ============================================================
 //  SETTINGS
 // ============================================================
 static const int    GPIO_CHIP = 0;        // Pi 4 and earlier: 0, Pi 5: 4
-static const int    deadzone  = 8000;     // axis range is -32767..32767
-static const int    AXIS      = 0;        // which joystick axis drives the robot
-static const double DUTY      = 50.0;     // motor duty cycle, 0-100
-static const int    MOTOR_HZ  = 1000;     // PWM frequency on motor pins
+static const int    deadzone  = 8000;
+static const int    AXIS      = 0;
+static const double MAX_DUTY  = 50.0;     // top motor duty (0-100). Lower = gentler
+static const int    MOTOR_HZ  = 1000;
 static const int    SERVO_HZ  = 50;
-static const int    SERVO_US  = 1500;     // servo pulse width while moving
-static const int    TICK_US   = 20000;    // 20 ms loop, same as the stress test
+static const int    SERVO_US  = 1500;
+static const int    TICK_US   = 20000;    // 20 ms loop
+
+// Fraction of full speed added per tick. 0.01 = ~1 s from 0 to 50% duty.
+// Lower = softer start and slower reversal.
+static const double RAMP_PER_TICK = 0.01;
 
 // ============================================================
 //  PINS (BCM numbers)
@@ -41,16 +47,21 @@ std::vector<int> axes(8, 0), buttons(16, 0);
 volatile std::sig_atomic_t stop = 0;
 void onSignal(int) { stop = 1; }
 
-static int g_motorDir[4] = { 0, 0, 0, 0 };   // last direction applied per motor
+static int    g_motorDir[4]   = { 0, 0, 0, 0 };
+static double g_speed[4]      = { 0, 0, 0, 0 };   // -1.0 .. 1.0, ramped
+static bool   g_servoOn[4]    = { false, false, false, false };
 
 // ============================================================
 //  OUTPUT HELPERS
 // ============================================================
-// dir: 1 = forward (PWM on in1), -1 = reverse (PWM on in2), 0 = stop
-static void setMotor(int h, int idx, int dir, double duty) {
+static void setMotor(int h, int idx, double speed) {
     const Motor& m = MOTORS[idx];
+    const double deadband = 0.05;
 
-    // Direction changed: shut both pins off before driving the other one
+    int dir = 0;
+    if (speed >= deadband)       dir = 1;
+    else if (speed <= -deadband) dir = -1;
+
     if (dir != g_motorDir[idx]) {
         lgTxPwm(h, m.in1, MOTOR_HZ, 0.0, 0, 0);
         lgTxPwm(h, m.in2, MOTOR_HZ, 0.0, 0, 0);
@@ -58,21 +69,26 @@ static void setMotor(int h, int idx, int dir, double duty) {
         lgGpioWrite(h, m.in2, 0);
         g_motorDir[idx] = dir;
     }
+    if (dir == 0) return;
 
-    if (dir == 0) return;   // stopped, both pins low
-
+    double duty = std::min(std::fabs(speed) * 100.0, MAX_DUTY);
     lgTxPwm(h, (dir > 0) ? m.in1 : m.in2, MOTOR_HZ, duty, 0, 0);
 }
 
-static void setServo(int h, int idx, int dir) {
-    // pulse width 0 = stop sending pulses
-    lgTxServo(h, SERVO_PINS[idx], dir == 0 ? 0 : SERVO_US, SERVO_HZ, 0, 0);
+static void setServo(int h, int idx, bool on) {
+    if (on != g_servoOn[idx]) {
+        lgTxServo(h, SERVO_PINS[idx], on ? SERVO_US : 0, SERVO_HZ, 0, 0);
+        g_servoOn[idx] = on;
+    }
 }
 
 static void stopAll(int h) {
     for (int i = 0; i < 4; i++) {
-        setServo(h, i, 0);
-        setMotor(h, i, 0, 0.0);
+        lgTxServo(h, SERVO_PINS[i], 0, SERVO_HZ, 0, 0);
+        lgTxPwm(h, MOTORS[i].in1, MOTOR_HZ, 0.0, 0, 0);
+        lgTxPwm(h, MOTORS[i].in2, MOTOR_HZ, 0.0, 0, 0);
+        g_motorDir[i] = 0;
+        g_servoOn[i] = false;
     }
 }
 
@@ -89,7 +105,6 @@ int main() {
         return 1;
     }
 
-    // Claim all pins as outputs, starting low
     for (int i = 0; i < 4; i++) {
         int pins[3] = { SERVO_PINS[i], MOTORS[i].in1, MOTORS[i].in2 };
         for (int p : pins) {
@@ -111,13 +126,10 @@ int main() {
     }
 
     std::printf("Running. Ctrl+C to stop.\n");
-
     bool running = true;
-    int  lastdir = 0;   // direction actually applied on the previous tick
 
     while (running && !stop) {
 
-        // ---- read all pending joystick events ----
         js_event e;
         while (read(js, &e, sizeof(e)) == (ssize_t)sizeof(e)) {
             switch (e.type & ~JS_EVENT_INIT) {
@@ -129,35 +141,32 @@ int main() {
                     break;
             }
         }
-        int readErr = errno;   // save immediately, before any other calls
+        int readErr = errno;
 
-        // ---- decide direction ----
-        int want = 0;
-        if (axes[AXIS] > deadzone)       want = 1;
-        else if (axes[AXIS] < -deadzone) want = -1;
+        // Target speed from the stick (fixed magnitude, direction only)
+        double target = 0.0;
+        if (axes[AXIS] > deadzone)       target =  MAX_DUTY / 100.0;
+        else if (axes[AXIS] < -deadzone) target = -MAX_DUTY / 100.0;
 
-        // Never reverse directly: pass through stop for one tick
-        int dir = want;
-        if (lastdir != 0 && want != 0 && want != lastdir) dir = 0;
-        lastdir = dir;
-
-        // ---- apply every tick (same pattern as the stress test) ----
         for (int i = 0; i < 4; i++) {
-            setServo(h, i, dir);
-            setMotor(h, i, dir, DUTY);
+            // Ramp toward the target; reversals pass slowly through zero
+            double diff = target - g_speed[i];
+            if (diff >  RAMP_PER_TICK) diff =  RAMP_PER_TICK;
+            if (diff < -RAMP_PER_TICK) diff = -RAMP_PER_TICK;
+            g_speed[i] += diff;
+
+            setMotor(h, i, g_speed[i]);
+            setServo(h, i, std::fabs(g_speed[i]) >= 0.05);
         }
 
-        // ---- exit only if the joystick really failed ----
         if (readErr != EAGAIN) {
             std::fprintf(stderr, "joystick read failed: errno=%d (%s)\n",
                          readErr, std::strerror(readErr));
             running = false;
         }
-
         usleep(TICK_US);
     }
 
-    // ---- safe shutdown ----
     stopAll(h);
     usleep(200000);
     for (int i = 0; i < 4; i++) {
@@ -165,7 +174,6 @@ int main() {
         lgGpioWrite(h, MOTORS[i].in1, 0);
         lgGpioWrite(h, MOTORS[i].in2, 0);
     }
-
     close(js);
     lgGpiochipClose(h);
     return 0;

@@ -60,11 +60,17 @@ void setServo(int h, int servo, int dir){
     lgTxServo(h, servo, dir == 0 ? 0 : 1500, 50, 0, 0);
 }
 
-void setAll(int h, int dir, float duty){
-    setServo(h, servo_TL, dir); setMotor(h, motor_TLA, motor_TLB, dir, duty);
-    setServo(h, servo_TR, dir); setMotor(h, motor_TRA, motor_TRB, dir, duty);
-    setServo(h, servo_BL, dir); setMotor(h, motor_BLA, motor_BLB, dir, duty);
-    setServo(h, servo_BR, dir); setMotor(h, motor_BRA, motor_BRB, dir, duty);
+void setAll(int h, int dir, float duty, bool servoChange){
+    if (servoChange) {
+        setServo(h, servo_TL, dir);
+        setServo(h, servo_TR, dir);
+        setServo(h, servo_BL, dir);
+        setServo(h, servo_BR, dir);
+    }
+    setMotor(h, motor_TLA, motor_TLB, dir, duty);
+    setMotor(h, motor_TRA, motor_TRB, dir, duty);
+    setMotor(h, motor_BLA, motor_BLB, dir, duty);
+    setMotor(h, motor_BRA, motor_BRB, dir, duty);
 }
 
 int main() {
@@ -114,12 +120,9 @@ int main() {
     if (axes[0] < -deadzone) dir = -1;
     
     if (dir != lastdir){
-        std::printf("dir %d -> dir %d\n", lastdir, dir);
-        std::fflush(stdout);
-        setAll(h, dir, duty);
-        std::printf("setAll done\n");
-        std::fflush(stdout);
-        lastdir = dir;  
+        bool servoChange = (dir == 0) != (lastdir == 0);
+        setAll(h, dir, duty, servoChange);
+        lastdir = dir;
     }
 
     if (readErr != EAGAIN) {
@@ -131,7 +134,7 @@ int main() {
     }
 
 
-    setAll(h, 0, duty);
+    setAll(h, 0, duty, true);
     close(js);
     lgGpiochipClose(h);
     return 0;

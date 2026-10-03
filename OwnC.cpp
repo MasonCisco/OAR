@@ -7,6 +7,7 @@
 #include <csignal>
 #include <cerrno>
 #include <cstdlib>
+#include <cstring>
 
 std::vector<int> axes (8,0), buttons(16,0);
 
@@ -113,13 +114,18 @@ int main() {
     if (axes[0] < -deadzone) dir = -1;
     
     if (dir != lastdir){
+        std::printf("dir %d -> dir %d\n", lastdir, dir);
+        std::fflush(stdout);
         setAll(h, dir, duty);
+        std::printf("setAll done\n");
+        std::fflush(stdout);
         lastdir = dir;  
     }
 
-
-
-    if (readErr != EAGAIN) running = false;
+    if (readErr != EAGAIN) {
+        std::fprintf(stderr, "joystick read failed: errno=%d (%s)\n", readErr, std::strerror(readErr));
+        running = false;
+    }
     usleep(10000);
 
     }

@@ -8,6 +8,9 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
+
+using Clock = std::chrono::steady_clock;
 
 std::vector<int> axes (8,0), buttons(16,0);
 
@@ -95,6 +98,7 @@ int main() {
     std::signal(SIGINT, onSignal);
     bool running = true;
     int lastdir = 0;
+    auto lastChange = Clock::now();
     while (running && !stop){
     js_event e;
     while (read(js,&e, sizeof(e)) == (ssize_t)sizeof(e)){
@@ -119,10 +123,14 @@ int main() {
     if (axes[0] > deadzone) dir = 1;
     if (axes[0] < -deadzone) dir = -1;
     
-    if (dir != lastdir){
-        bool servoChange = (dir == 0) != (lastdir == 0);
-        setAll(h, dir, duty, servoChange);
-        lastdir = dir;
+    if (dir != lastdir) {
+        auto now = Clock::now();
+        if (now - lastChange >= std::chrono::milliseconds(150)) {
+            bool servoChange = (dir == 0) != (lastdir == 0);
+            setAll(h, dir, duty, servoChange);
+            lastdir = dir;
+            lastChange = now;
+        }
     }
 
     if (readErr != EAGAIN) {

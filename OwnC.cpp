@@ -42,7 +42,29 @@ const int outputPins[] = {
     servo_BR, motor_BRA, motor_BRB,
 };
 
+void setMotor(int h, int pinA, int pinB, int dir, float duty){
+       if (dir > 0) {
+        lgTxPwm(h, pinB, 1500, 0.0f, 0, 0);    // B held low
+        lgTxPwm(h, pinA, 1500, duty, 0, 0);
+    } else if (dir < 0) {
+        lgTxPwm(h, pinA, 1500, 0.0f, 0, 0);    // A held low
+        lgTxPwm(h, pinB, 1500, duty, 0, 0);
+    } else {
+        lgTxPwm(h, pinA, 1500, 0.0f, 0, 0);    // both held low = stop
+        lgTxPwm(h, pinB, 1500, 0.0f, 0, 0);
+    }
+}
 
+void setServo(int h, int servo, int dir){
+    lgTxServo(h, servo, dir == 0 ? 0 : 1500, 50, 0, 0);
+}
+
+void setAll(int h, int dir, float duty){
+    setServo(h, servo_TL, dir); setMotor(h, motor_TLA, motor_TLB, dir, duty);
+    setServo(h, servo_TR, dir); setMotor(h, motor_TRA, motor_TRB, dir, duty);
+    setServo(h, servo_BL, dir); setMotor(h, motor_BLA, motor_BLB, dir, duty);
+    setServo(h, servo_BR, dir); setMotor(h, motor_BRA, motor_BRB, dir, duty);
+}
 
 int main() {
 
@@ -84,92 +106,30 @@ int main() {
                 break;
         }
     }
+    int readErr = errno;
     
     int dir = 0;
     if (axes[0] > deadzone) dir = 1;
     if (axes[0] < -deadzone) dir = -1;
     
     if (dir != lastdir){
-    if(dir == 1){
-    lgTxServo(h, servo_TL, 1500, 50, 0, 0);
-    lgTxPwm(h, motor_TLA, 1500, duty, 0, 0);
-    lgTxPwm(h, motor_TLB, 0, duty, 0, 0);
-
-    lgTxServo(h, servo_TR, 1500, 50, 0, 0);
-    lgTxPwm(h, motor_TRA, 1500, duty, 0, 0);
-    lgTxPwm(h, motor_TRB, 0, duty, 0, 0);
-
-    lgTxServo(h, servo_BL, 1500, 50, 0, 0);
-    lgTxPwm(h, motor_BLA, 1500, duty, 0, 0);
-    lgTxPwm(h, motor_BLB, 0, duty, 0, 0);
-
-    lgTxServo(h, servo_BR, 1500, 50, 0, 0);
-    lgTxPwm(h, motor_BRA, 1500, duty, 0, 0);
-    lgTxPwm(h, motor_BRB, 0, duty, 0, 0);
-    } 
-    else if (dir == -1){
-    lgTxServo(h, servo_TL, 1500, 50, 0, 0);
-    lgTxPwm(h, motor_TLA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_TLB, 1500, duty, 0, 0);
-
-    lgTxServo(h, servo_TR, 1500, 50, 0, 0);
-    lgTxPwm(h, motor_TRA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_TRB, 1500, duty, 0, 0);
-
-    lgTxServo(h, servo_BL, 1500, 50, 0, 0);
-    lgTxPwm(h, motor_BLA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_BLB, 1500, duty, 0, 0);
-
-    lgTxServo(h, servo_BR, 1500, 50, 0, 0);
-    lgTxPwm(h, motor_BRA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_BRB, 1500, duty, 0, 0);
+        setAll(h, dir, duty);
+        lastdir = dir;  
     }
-    else {
-    lgTxServo(h, servo_TL, 0, 50, 0, 0);
-    lgTxPwm(h, motor_TLA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_TLB, 0, duty, 0, 0);
 
-    lgTxServo(h, servo_TR, 0, 50, 0, 0);
-    lgTxPwm(h, motor_TRA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_TRB, 0, duty, 0, 0);
 
-    lgTxServo(h, servo_BL, 0, 50, 0, 0);
-    lgTxPwm(h, motor_BLA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_BLB, 0, duty, 0, 0);
 
-    lgTxServo(h, servo_BR, 0, 50, 0, 0);
-    lgTxPwm(h, motor_BRA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_BRB, 0, duty, 0, 0);
-    }
-    lastdir = dir;
-}
-  
-
-    if (errno != EAGAIN) running = false;
+    if (readErr != EAGAIN) running = false;
     usleep(10000);
 
     }
 
-    lgTxServo(h, servo_TL, 0, 50, 0, 0);
-    lgTxPwm(h, motor_TLA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_TLB, 0, duty, 0, 0);
 
-    lgTxServo(h, servo_TR, 0, 50, 0, 0);
-    lgTxPwm(h, motor_TRA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_TRB, 0, duty, 0, 0);
-
-    lgTxServo(h, servo_BL, 0, 50, 0, 0);
-    lgTxPwm(h, motor_BLA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_BLB, 0, duty, 0, 0);
-
-    lgTxServo(h, servo_BR, 0, 50, 0, 0);
-    lgTxPwm(h, motor_BRA, 0, duty, 0, 0);
-    lgTxPwm(h, motor_BRB, 0, duty, 0, 0);
+    setAll(h, 0, duty);
     close(js);
     lgGpiochipClose(h);
     return 0;
 }
-
 
 
 

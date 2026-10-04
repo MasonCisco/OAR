@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstring>
 #include <thread>
+#include <cstdlib> 
 
 // ============================================================
 //  SETTINGS
@@ -28,7 +29,6 @@ static const double MAX_DUTY    = 50.0;    // top motor duty (0-100). Lower = ge
 static const double RAMP_PER_TICK = 0.05;  // speed change per tick (0.05 @ 10 ms = 0.2 s to full)
 static const int    MOTOR_HZ    = 1000;
 static const int    SERVO_HZ    = 50;
-static const int    SERVO_US    = 1500;
 static const int    TICK_MS     = 10;
 
 // true  = servos are held at SERVO_US the whole time (what the stress test does)
@@ -78,11 +78,12 @@ static void setMotor(int h, int idx, double speed /* -1..1 */) {
     lgTxPwm(h, (dir > 0) ? m.in1 : m.in2, MOTOR_HZ, duty, 0, 0);
 }
 
-static void setServo(int h, int idx, bool on) {
-    if (on != g_servoOn[idx]) {                 // only touch the servo on a real change
-        lgTxServo(h, SERVO_PINS[idx], on ? SERVO_US : 0, SERVO_HZ, 0, 0);
-        g_servoOn[idx] = on;
-    }
+static int g_servoPos[4] = {0, 0, 0, 0};
+
+static void setServo(int h, int idx, int pos) {
+    if (pos == g_servoPos[idx]) return; 
+        lgTxServo(h, SERVO_PINS[idx], pos, SERVO_HZ, 0, 0);
+        g_servoPos[idx] = pos;
 }
 
 static void stopAll(int h) {
@@ -90,6 +91,7 @@ static void stopAll(int h) {
         lgTxServo(h, SERVO_PINS[i], 0, SERVO_HZ, 0, 0);
         lgTxPwm(h, MOTORS[i].in1, MOTOR_HZ, 0.0, 0, 0);
         lgTxPwm(h, MOTORS[i].in2, MOTOR_HZ, 0.0, 0, 0);
+        g_servoPos[i] = 0;
         g_motorDir[i] = 0;
         g_servoOn[i] = false;
     }
@@ -127,11 +129,12 @@ int main() {
 
     // Start servos at center and give them a moment, like the stress test
     if (SERVO_ALWAYS_ON) {
-        for (int i = 0; i < 4; i++) setServo(h, i, true);
+        for (int i = 0; i < 4; i++) setServo(h, i, 1500);
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
     int    axisValue = 0;                       // latest raw value of AXIS
+    int    axis1Value = 0;
     int    target    = 0;                       // -1, 0, 1  (your deadzone logic)
     double speed[4]  = { 0, 0, 0, 0 };          // ramped speed per motor
 
@@ -141,10 +144,13 @@ int main() {
         // ---- read all pending events ----
         js_event e;
         ssize_t n;
+
         while ((n = read(fd, &e, sizeof(e))) == (ssize_t)sizeof(e)) {
-            if ((e.type & ~JS_EVENT_INIT) == JS_EVENT_AXIS && e.number == AXIS)
-                axisValue = e.value;
+            if ((e.type & ~JS_EVENT_INIT) != JS_EVENT_AXIS) continue;
+            if (e.number == AXIS) axisValue = e.value;
+            if (e.number == 1) axis1Value = e.value;
         }
+
         if (n == 0 || (n < 0 && errno != EAGAIN)) {
             std::fprintf(stderr, "\nController lost (%s). Stopping.\n",
                          n == 0 ? "EOF" : std::strerror(errno));
@@ -165,8 +171,12 @@ int main() {
             setMotor(h, i, speed[i]);
             if (std::fabs(speed[i]) >= 0.03) anyMoving = true;
         }
-        if (!SERVO_ALWAYS_ON)
-            for (int i = 0; i < 4; i++) setServo(h, i, anyMoving);
+
+        int servoPos = 1500;
+        if(axis1Value > 10000) servoPos = 2300;
+        else if(axis1Value < -10000) servoPos = 700;
+
+        for(int i = 0; i < 4; i++) setServo(h, i, servoPos);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(TICK_MS));
     }

@@ -38,14 +38,14 @@ static const bool   SERVO_ALWAYS_ON = true;
 // ============================================================
 //  PINS (BCM numbers)
 // ============================================================
-static const int SERVO_PINS[4] = { 22, 23, 27, 17 };   // TL, TR, BL, BR
+static const int SERVO_PINS[4] = { 22, 17, 23, 27 };   // TL, TR, BL, BR
 
 struct Motor { int in1; int in2; };
 static const Motor MOTORS[4] = {
     {  5,  6 },   // Top Left
-    { 20, 21 },   // Top Right
-    { 26, 16 },   // Bottom Left
-    { 13, 19 }    // Bottom Right
+    { 13, 19 },   // Top Right
+    { 20, 21 },   // Bottom Left
+    { 26, 16 }    // Bottom Right
 };
 
 // ============================================================
@@ -172,11 +172,20 @@ int main() {
             if (std::fabs(speed[i]) >= 0.03) anyMoving = true;
         }
 
-        int servoPos = 1500;
-        if(axis1Value > 10000) servoPos = 2300;
-        else if(axis1Value < -10000) servoPos = 700;
+        int servoPosTLBR = 1500;
+        int servoPosTRBL = 1500;
 
-        for(int i = 0; i < 4; i++) setServo(h, i, servoPos);
+        if(axis1Value > 10000){
+             servoPosTLBR = 1500;
+             servoPosTRBL = 2300;
+        }
+        else if(axis1Value < -10000) {
+            servoPosTLBR = 2300;
+            servoPosTRBL = 1500;
+        }
+
+        for(int i = 0; i < 2; i++) setServo(h, i, servoPosTLBR);
+        for(int i = 2; i < 4; i++) setServo(h, i, servoPosTRBL);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(TICK_MS));
     }

@@ -175,14 +175,23 @@ int main() {
         int servoPosTLBR = 1500;
         int servoPosTRBL = 1500;
 
-        if(axis1Value > 10000){
+        if(axis1Value > 10000 && axisValue > 1000){ //Quad 1
              servoPosTLBR = 1500;
              servoPosTRBL = 2300;
         }
-        else if(axis1Value < -10000) {
+        else if(axis1Value < -10000 && axisValue > 1000) { //Quad 2
             servoPosTLBR = 2300;
             servoPosTRBL = 1500;
         }
+        else if(axis1Value < -10000 && axisValue < -1000){ //Quad 3
+             servoPosTLBR = 1500;
+             servoPosTRBL = 2300;
+        }
+        else if(axis1Value > 10000 && axisValue < -1000){ //Quad 4
+             servoPosTLBR = 2300;
+             servoPosTRBL = 1500;
+        }
+        
 
         for(int i = 0; i < 2; i++) setServo(h, i, servoPosTLBR);
         for(int i = 2; i < 4; i++) setServo(h, i, servoPosTRBL);
